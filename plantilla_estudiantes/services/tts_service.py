@@ -51,28 +51,42 @@ class TTSService:
         return base64.b64encode(buffer.getvalue()).decode("ascii")
 
     def sintetizar_respuesta_estudiante(
-        self,
-        resultado_intencion: IntentMatchResult,
-        incluir_saludo: bool = False
-    ) -> TTSOutput:
-        """
-        Ensambla el guion hablado del estudiante monitor y genera la salida de audio y SSML.
-        """
-        # TODO: [Estudiante 4] - Implementar la síntesis de voz estudiantil en `sintetizar_respuesta_estudiante`.
-        # Pasos que debes programar aquí:
-        # 1. Crear una lista de fragmentos para el guion hablado:
-        #    - Si `incluir_saludo` es `True`, agregar `self.saludo_inicial`.
-        #    - Si `resultado_intencion.es_fallback` es `False` y existen elementos en `self.muletillas`,
-        #      agregar las muletillas introductorias autorizadas (`self.muletillas[0]` y `self.muletillas[1]`).
-        #    - Agregar SIEMPRE de manera íntegra `resultado_intencion.respuesta_institucional_exacta`
-        #      (¡Nunca modifiques el texto oficial para no introducir alucinaciones!).
-        #    - Si no es fallback y existe `self.muletillas[2]`, agregarla como cierre cordial.
-        # 2. Unir los fragmentos con espacios en `guion_completo`.
-        # 3. Calcular `duracion_segundos` dividiendo el número de palabras de `guion_completo`
-        #    entre `self.velocidad_wpm` y multiplicando por 60.0 (redondeado a 2 decimales).
-        # 4. Construir la cadena `ssml` envolviendo `guion_completo` en etiquetas `<speak>`, `<voice>` y `<prosody>`.
-        # 5. Generar el audio WAV en Base64 invocando `self._generar_wav_sintetico_base64(...)`.
-        # 6. Retornar el objeto `TTSOutput(...)` con todos sus campos completos.
-        raise NotImplementedError(
-            "TODO: [Estudiante 4] Debe implementar TTSService.sintetizar_respuesta_estudiante()"
-        )
+    self,
+    resultado_intencion: IntentMatchResult,
+    incluir_saludo: bool = False
+) -> TTSOutput:
+    fragmentos: list[str] = []
+
+    if incluir_saludo:
+        fragmentos.append(self.saludo_inicial)
+
+    if not resultado_intencion.es_fallback and len(self.muletillas) >= 2:
+        fragmentos.append(self.muletillas[0])
+        fragmentos.append(self.muletillas[1])
+
+    fragmentos.append(resultado_intencion.respuesta_institucional_exacta)
+
+    if not resultado_intencion.es_fallback and len(self.muletillas) >= 3:
+        fragmentos.append(self.muletillas[2])
+
+    guion_completo = " ".join(fragmentos)
+
+    num_palabras = len(guion_completo.split())
+    duracion_segundos = round(num_palabras / self.velocidad_wpm * 60.0, 2)
+
+    ssml = (
+        f'<speak version="1.0" xml:lang="{self.idioma_codigo}">'
+        f'<voice name="{self.nombre_guia}">'
+        f'<prosody rate="medium">{escape(guion_completo)}</prosody>'
+        f'</voice></speak>'
+    )
+
+    audio_b64 = self._generar_wav_sintetico_base64(duracion_seg=duracion_segundos)
+
+    return TTSOutput(
+        guion_hablado_estudiante=guion_completo,
+        ssml_generado=ssml,
+        audio_wav_base64=audio_b64,
+        duracion_estimada_segundos=duracion_segundos,
+        perfil_voz=self.nombre_guia,
+    )
